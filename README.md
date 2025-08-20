@@ -11,4 +11,4 @@ There are four n8n workflows existing. Three to build up the GraphRAG. The frame
 and one with a very simple query workflow:
 - query_workflow 
 
-A description can be found on medium. 
+A description can be found on [medium](https://medium.com/@linos2/graphrag-with-neo4j-and-qdrant-on-n8n-8fa799a4a24d). 
