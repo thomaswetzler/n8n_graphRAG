@@ -1,0 +1,586 @@
+{
+  "name": "framework_workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        624
+      ],
+      "id": "5fe8cfc8-1295-4958-9d16-467ba8dfd42f",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/tomasonjo/blog-datasets/main/news_articles.csv",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -192,
+        624
+      ],
+      "id": "6211d603-c5e8-4c2f-b619-962ee4cd4715",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        32,
+        624
+      ],
+      "id": "8a3cfd5d-728e-4130-9b57-a229c6c4201a",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "maxItems": 500000
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        256,
+        624
+      ],
+      "id": "8818300b-bfd7-41c2-967a-4b606e701038",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"nodes\": [\n    {\n      \"name\": \"FIRSTENERGY\",\n      \"type\": \"ORGANIZATION\",\n      \"description\": \"FirstEnergy is a utilities provider that posted its earnings results on Tuesday, reporting $0.53 earnings per share for the quarter.\"\n    },\n    {\n      \"name\": \"NYSE\",\n      \"type\": \"ORGANIZATION\",\n      \"description\": \"The New York Stock Exchange (NYSE) is where FirstEnergy's stock is listed, with the ticker symbol FE.\"\n    },\n    {\n      \"name\": \"RTT NEWS\",\n      \"type\": \"ORGANIZATION\",\n      \"description\": \"RTT News reported on FirstEnergy's earnings results, stating that the company topped the consensus estimate of $0.52 by $0.01.\"\n    }\n  ],\n  \"edges\": [\n    {\n      \"source\": \"FIRSTENERGY\",\n      \"target\": \"NYSE\",\n      \"relationship\": \"FirstEnergy's stock is listed on the NYSE, with the ticker symbol FE.\",\n      \"relationship_short\": \"listed\", \n      \"relationship_strength\": 8\n    },\n    {\n      \"source\": \"FIRSTENERGY\",\n      \"target\": \"RTT NEWS\",\n      \"relationship\": \"RTT News reported on FirstEnergy's earnings results.\",\n      \"relationship_short\": \"reported\", \n      \"relationship_strength\": 2\n    }\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1056,
+        496
+      ],
+      "id": "90b6c450-1058-4e7d-b905-03c0f42c54bc",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "model": "llama3.3:70b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmOllama",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        704
+      ],
+      "id": "16d30d01-0158-4204-8476-f4334065f1d2",
+      "name": "Ollama Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "awzaZMaoPxhKSura",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama3.3:70b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        928,
+        496
+      ],
+      "id": "0965bb71-49e8-4309-9992-4eaa4bac163b",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "awzaZMaoPxhKSura",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        480,
+        624
+      ],
+      "id": "95261da0-b292-4b20-82e7-c43b1d2b4816",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        640,
+        288
+      ],
+      "id": "6f397959-2cc9-41d2-a18a-d9e0a5d9586c",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "9w5OBSavQO9BZ47S",
+          "mode": "list",
+          "cachedResultName": "qdrant_workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2576,
+        448
+      ],
+      "id": "ce4a61f4-95f6-4e86-b66a-00bbc99602d2",
+      "name": "qdrant",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "-Goal-\nGiven a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities. All names for nodes and the relations should be in lowercase and should not contain any special character. \n\n-Steps-\n1. Identify all entities. For each identified entity, extract the following information:\n- entity_name: Name of the entity, capitalized\n- entity_type: One of the following types: [{entity_types}]\n- entity_description: Comprehensive description of the entity's attributes and activities\n\nFormat each entity output as a JSON entry in node \"nodes:\" with the following format:\n\n{{\"name\": <entity name>, \"type\": <type>, \"description\": <entity description>}}\n\n2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.\nFor each pair of related entities, extract the following information:\n- source_entity: name of the source entity, as identified in step 1\n- target_entity: name of the target entity, as identified in step 1\n- relationship_description: explanation as to why you think the source entity and the target entity are related to each other\n- relationship_short: summarizes the relationship_description to one word for using as a key. Special characters are not allowed in the string.  \n- relationship_strength: an integer score between 1 to 10, indicating strength of the relationship between the source entity and target entity\n\nFormat each relationship as a JSON entry in node \"edges:\" with the following format:\n\n{{\"source\": <source_entity>, \"target\": <target_entity>, \"relationship\": <relationship_description>, \"relationship_short\": <one_word_relationship_description>, \"relationship_strength\": <relationship_strength>}}\n\n3. Return output in {language} as a single list of all JSON entities and relationships identified in steps 1 and 2.\n\n4. If you have to translate into {language}, just translate the descriptions, nothing else!\n\n######################\n-Examples-\n######################\nExample 1:\nText:\nThe Verdantis's Central Institution is scheduled to meet on Monday and Thursday, with the institution planning to release its latest policy decision on Thursday at 1:30 p.m. PDT, followed by a press conference where Central Institution Chair Martin Smith will take questions. Investors expect the Market Strategy Committee to hold its benchmark interest rate steady in a range of 3.5%-3.75%.\n######################\nOutput:\n[\n  {{\"nodes\": [\n    {{\"name\": \"CENTRAL INSTITUTION\", \"type\": \"ORGANIZATION\", \"description\": \"The Central Institution is the Federal Reserve of Verdantis, which is setting interest rates on Monday and Thursday\"}},\n    {{\"name\": \"MARTIN SMITH\", \"type\": \"PERSON\", \"description\": \"Martin Smith is the chair of the Central Institution\"}},\n    {{\"name\": \"MARKET STRATEGY COMMITTEE\", \"type\": \"ORGANIZATION\", \"description\": \"The Central Institution committee makes key decisions about interest rates and the growth of Verdantis's money supply\"}}\n  ]}}\n  {{\"edges: [\n  {{\"source\": \"MARTIN SMITH\", \"target\": \"CENTRAL INSTITUTION\", \"relationship\": \"Martin Smith is the Chair of the Central Institution and will answer questions at a press conference\", \"relationship_short\": \"is_chair\", \"relationship_strength\": 9}}\n  ]}}\n]\n\n\n######################\nExample 2:\nText:\nTechGlobal's (TG) stock skyrocketed in its opening day on the Global Exchange Thursday. But IPO experts warn that the semiconductor corporation's debut on the public markets isn't indicative of how other newly listed companies may perform.\n\nTechGlobal, a formerly public company, was taken private by Vision Holdings in 2014. The well-established chip designer says it powers 85% of premium smartphones.\n######################\nOutput:\n[\n  {{\"nodes\": [\n    {{\"name\": \"TECHGLOBAL\", \"type\": \"ORGANIZATION\", \"description\": \"TechGlobal is a stock now listed on the Global Exchange which powers 85% of premium smartphones\"}},\n    {{\"name\": \"VISION HOLDINGS\", \"type\": \"ORGANIZATION\", \"description\": \"Vision Holdings is a firm that previously owned TechGlobal\"}}\n  ]}}\n  {{\"edges: [\n    {{\"source\": \"TECHGLOBAL\", \"target\": \"VISION HOLDINGS\", \"relationship\": \"Vision Holdings formerly owned TechGlobal from 2014 until present\", \"relationship_short\": \"owns\", \"relationship_strength\": 5}}\n  ]}}\n]\n\n######################\nExample 3:\nText:\nFive Aurelians jailed for 8 years in Firuzabad and widely regarded as hostages are on their way home to Aurelia.\n\nThe swap orchestrated by Quintara was finalized when $8bn of Firuzi funds were transferred to financial institutions in Krohaara, the capital of Quintara.\n\nThe exchange initiated in Firuzabad's capital, Tiruzia, led to the four men and one woman, who are also Firuzi nationals, boarding a chartered flight to Krohaara.\n\nThey were welcomed by senior Aurelian officials and are now on their way to Aurelia's capital, Cashion.\n\nThe Aurelians include 39-year-old businessman Samuel Namara, who has been held in Tiruzia's Alhamia Prison, as well as journalist Durke Bataglani, 59, and environmentalist Meggie Tazbah, 53, who also holds Bratinas nationality.\n######################\nOutput:\n[\n  {{\"nodes\": [\n    {{\"name\": \"FIRUZABAD\", \"type\": \"GEO\", \"description\": \"Firuzabad held Aurelians as hostages\"}},\n    {{\"name\": \"AURELIA\", \"type\": \"GEO\", \"description\": \"Country seeking to release hostages\"}},\n    {{\"name\": \"QUINTARA\", \"type\": \"GEO\", \"description\": \"Country that negotiated a swap of money in exchange for hostages\"}},\n    {{\"name\": \"TIRUZIA\", \"type\": \"GEO\", \"description\": \"Capital of Firuzabad where the Aurelians were being held\"}},\n    {{\"name\": \"KROHAARA\", \"type\": \"GEO\", \"description\": \"Capital city in Quintara\"}},\n    {{\"name\": \"CASHION\", \"type\": \"GEO\", \"description\": \"Capital city in Aurelia\"}},\n    {{\"name\": \"SAMUEL NAMARA\", \"type\": \"PERSON\", \"description\": \"Aurelian who spent time in Tiruzia's Alhamia Prison\"}},\n    {{\"name\": \"ALHAMIA PRISON\", \"type\": \"GEO\", \"description\": \"Prison in Tiruzia\"}},\n    {{\"name\": \"DURKE BATAGLANI\", \"type\": \"PERSON\", \"description\": \"Aurelian journalist who was held hostage\"}},\n    {{\"name\": \"MEGGIE TAZBAH\", \"type\": \"PERSON\", \"description\": \"Bratinas national and environmentalist who was held hostage\"}},\n  ]}}\n  {{\"edges: [\n    {{\"source\": \"FIRUZABAD\", \"target\": \"AURELIA\", \"relationship\": \"Firuzabad negotiated a hostage exchange with Aurelia\", \"relationship_short\": \"negotiated\", \"relationship_strength\": 2}},\n    {{\"source\": \"QUINTARA\", \"target\": \"AURELIA\", \"relationship\": \"Quintara brokered the hostage exchange between Firuzabad and Aurelia\", \"relationship_short\": \"brokered\", \"relationship_strength\": 2}},\n    {{\"source\": \"QUINTARA\", \"target\": \"FIRUZABAD\", \"relationship\": \"Quintara brokered the hostage exchange between Firuzabad and Aurelia\", \"relationship_strength\": 2}},\n    {{\"source\": \"SAMUEL NAMARA\", \"target\": \"ALHAMIA PRISON\", \"relationship\": \"Samuel Namara was a prisoner at Alhamia prison\", \"relationship_short\": \"prisoned\", \"relationship_strength\": 8}},\n    {{\"source\": \"SAMUEL NAMARA\", \"target\": \"MEGGIE TAZBAH\", \"relationship\": \"Samuel Namara and Meggie Tazbah were exchanged in the same hostage release\", \"relationship_short\": \"exchanged\", \"relationship_strength\": 2}},\n    {{\"source\": \"SAMUEL NAMARA\", \"target\": \"DURKE BATAGLANI\", \"relationship\": \"Samuel Namara and Durke Bataglani were exchanged in the same hostage release\", \"relationship_short\": \"exchanged\", \"relationship_strength\": 2}},\n    {{\"source\": \"MEGGIE TAZBAH\", \"target\": \"DURKE BATAGLANI\", \"relationship\": \"Meggie Tazbah and Durke Bataglani were exchanged in the same hostage release\", \"relationship_short\": \"exchanged\", \"relationship_strength\": 2}},\n    {{\"source\": \"SAMUEL NAMARA\", \"target\": \"FIRUZABAD\", \"relationship\": \"Samuel Namara was a hostage in Firuzabad\",  \"relationship_short\": \"hostaged\", \"relationship_strength\": 2}},\n    {{\"source\": \"MEGGIE TAZBAH\", \"target\": \"FIRUZABAD\", \"relationship\": \"Meggie Tazbah was a hostage in Firuzabad\",  \"relationship_short\": \"hostaged\", \"relationship_strength\": 2}},\n    {{\"source\": \"DURKE BATAGLANI\", \"target\": \"FIRUZABAD\", \"relationship\": \"Durke Bataglani was a hostage in Firuzabad\",  \"relationship_short\": \"hostaged\", \"relationship_strength\": 2}}\n  ]}}\n]\n\n\n\n-Real Data-\n######################\nentity_types: {entity_types}\ntext: {input_text}\n######################\noutput:"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        944,
+        272
+      ],
+      "id": "d91fd595-3832-416f-aa67-c40812225e45",
+      "name": "Ontology Creation",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// UUID v4 generator ohne crypto\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nfunction normalizeName(s) {\n  if (!s) return '';\n  const noDiacritics = s.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '');\n  const lower = noDiacritics.toLowerCase();\n  const underscored = lower.replace(/[^a-z0-9]+/g, '_');\n  return underscored.replace(/^_+|_+$/g, '').replace(/_+/g, '_');\n}\n\nfunction makeNodeKey(name, type) {\n  const keyBase = normalizeName(name);\n  const t = (type || '').toLowerCase();\n  return `${t}::${keyBase}`;\n}\n\nreturn items.map(item => {\n  const inp = item.json?.output || item.json || {};\n  const rawNodes = Array.isArray(inp.nodes) ? inp.nodes : [];\n  const rawEdges = Array.isArray(inp.edges) ? inp.edges : [];\n\n  const nodeMap = new Map();     // key -> nodeObj\n  const nameIndex = new Map();   // normalized_name -> nodeId\n\n  // Nodes aufbereiten (dedupe + Felder anpassen)\n  for (const n of rawNodes) {\n    const key = makeNodeKey(n?.name ?? '', n?.type ?? '');\n    if (!nodeMap.has(key)) {\n      const id = uuidv4();\n      const normalizedName = normalizeName(n?.name ?? '');\n      const nodeObj = {\n        id,\n        key,\n        name: normalizedName,                 // <- jetzt der normalisierte Wert\n        original_name: n?.name ?? '',         // <- Originalname protokolliert\n        type: (n?.type ?? '').toLowerCase(),\n        description: n?.description ?? '',\n      };\n      nodeMap.set(key, nodeObj);\n      if (!nameIndex.has(normalizedName)) {\n        nameIndex.set(normalizedName, id);\n      }\n    }\n  }\n\n  // Edges auflösen über normalisierte Namen\n  const edges = [];\n  for (const e of rawEdges) {\n    const srcNorm = normalizeName(e?.source ?? '');\n    const tgtNorm = normalizeName(e?.target ?? '');\n    const srcId = nameIndex.get(srcNorm);\n    const tgtId = nameIndex.get(tgtNorm);\n    if (srcId && tgtId) {\n      edges.push({\n        id: uuidv4(),\n        source_id: srcId,\n        target_id: tgtId,\n        relationship: e?.relationship ?? null,\n        relationship_short: e?.relationship_short ?? null,\n        relationship_strength: e?.relationship_strength ?? null,\n      });\n    }\n  }\n\n  return {\n    json: {\n      nodes: Array.from(nodeMap.values()),\n      edges,\n      generated_at: new Date().toISOString(),\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        272
+      ],
+      "id": "f4c91659-838f-4730-b200-a11cdd229151",
+      "name": "Normalize Graph Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Für jedes Item: Nodes indexieren -> Edges mit eingebetteten Knoten bauen\nreturn items.map(item => {\n  const inp = item.json || {};\n  const nodes = Array.isArray(inp.nodes) ? inp.nodes : [];\n  const edges = Array.isArray(inp.edges) ? inp.edges : [];\n\n  // Map: nodeId -> nodeObj\n  const byId = new Map(nodes.map(n => [n.id, n]));\n\n  const mergedEdges = edges.map(e => {\n    const src = byId.get(e.source_id);\n    const tgt = byId.get(e.target_id);\n\n    // Fallbacks, falls ein Knoten nicht gefunden wird\n    const out = {\n      id: e.id,\n      relationship: e.relationship ?? null,\n      relationship_short: e.relationship_short ?? null,\n      relationship_strength: e.relationship_strength ?? null,\n    };\n\n    if (src) out.source = src; else out.source_id = e.source_id ?? null;\n    if (tgt) out.target = tgt; else out.target_id = e.target_id ?? null;\n\n    return out;\n  });\n\n  return {\n    json: {\n      edges: mergedEdges,\n      generated_at: inp.generated_at || new Date().toISOString(),\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        272
+      ],
+      "id": "0eb21175-872f-4c89-91d0-173130f294de",
+      "name": "Reorgranize Data"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PK9m7IDapilgwiFB",
+          "mode": "list",
+          "cachedResultName": "neo4j_workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2352,
+        272
+      ],
+      "id": "fc7f149f-b14d-4a59-a846-13285850d2a7",
+      "name": "neo4j",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "edges",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        272
+      ],
+      "id": "1f251a7e-ef76-4dec-9d0b-f10d7b7a7806",
+      "name": "Split Out",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "15002c84-e15f-4202-95c9-d62ecd9bcd42",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "1b2badd8-5ffb-409c-b413-2f811a47aee1",
+              "leftValue": "={{ $json.target }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2128,
+        272
+      ],
+      "id": "fb5c056c-4ec7-4056-b816-ed29657b6dd6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 672,
+        "width": 864,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -464,
+        224
+      ],
+      "typeVersion": 1,
+      "id": "dec90382-c10d-4c42-8c12-e03cc9a701c7",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 672,
+        "width": 470,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        224
+      ],
+      "typeVersion": 1,
+      "id": "6d6b48c7-581e-4460-bb67-44ca81d0a365",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 672,
+        "width": 544
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        864,
+        224
+      ],
+      "typeVersion": 1,
+      "id": "57b3bd35-c192-45ef-b6ac-d0799d684efc",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 672,
+        "width": 896,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1408,
+        224
+      ],
+      "typeVersion": 1,
+      "id": "8b6ffbe7-9233-466b-9b73-3a960aed51d6",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 672,
+        "width": 448,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2304,
+        224
+      ],
+      "typeVersion": 1,
+      "id": "3ee80ef2-57b9-4c44-a99a-69d1dda0129b",
+      "name": "Sticky Note5"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Ontology Creation",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Ontology Creation",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ontology Creation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "qdrant": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ontology Creation": {
+      "main": [
+        [
+          {
+            "node": "Normalize Graph Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Graph Data": {
+      "main": [
+        [
+          {
+            "node": "Reorgranize Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reorgranize Data": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "neo4j": {
+      "main": [
+        [
+          {
+            "node": "qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "neo4j",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "deafb3b5-fa98-4ba6-b796-0493d99558f5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c9edcf0f7da7eade4256e0e7e4c62bd0f101171b9be65e9e3bdd6b25808f3d3c"
+  },
+  "id": "Vp9jDC3J1hNwC3Uc",
+  "tags": []
+}

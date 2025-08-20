@@ -1,0 +1,711 @@
+{
+  "name": "neo4j_workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        896
+      ],
+      "id": "4c006ff1-d995-4be4-a8bc-e010b28b656e",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -96,
+        896
+      ],
+      "id": "1718e4c6-0194-409a-8bf7-c3bd479a31b0",
+      "name": "Loop Over nodes"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        560,
+        816
+      ],
+      "id": "66626a9f-618f-4638-a0f4-b51bf76b0bfb",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Erwartete Reihenfolge nach Merge:\n// items[0] = Original Edge-Daten\n// items[1] = Ergebnis Search existing source\n// items[2] = Ergebnis Search existing target\n\nconst originalEdge  = items[0]?.json ?? {};\nconst sourceSearch  = items[1]?.json;\nconst targetSearch  = items[2]?.json;\n\n// --- Helpers ---\nfunction isEmptyResult(result) {\n  if (!result) return true;\n  if (Array.isArray(result)) return result.length === 0;\n  if (typeof result === 'object') {\n    if (Object.keys(result).length === 0) return true;\n    const candidate = result.properties ?? result;\n    return !candidate || Object.keys(candidate).length === 0;\n  }\n  return true;\n}\n\n// Falls Suchergebnis leer → Original zurückgeben, sonst gefundene Properties nutzen\nfunction getFoundNode(result, fallback) {\n  if (Array.isArray(result) && result.length > 0) {\n    return result[0].properties ?? result[0];\n  } else if (result && typeof result === 'object' && Object.keys(result).length > 0) {\n    return result.properties ?? result;\n  }\n  return fallback ?? {};\n}\n\n// Nur erlaubte Node-Felder übernehmen und Relationship-Felder entfernen\nconst ALLOWED_NODE_FIELDS = new Set([\n  'id', 'key', 'name', 'original_name', 'type', 'description'\n]);\n// alles, was definitiv nicht in einen Node gehört:\nconst STRIP_FIELDS = new Set([\n  'relationship_strength', 'relationship', 'relationship_short'\n]);\n\nfunction sanitizeNode(nodeObj) {\n  const src = nodeObj || {};\n  const out = {};\n  for (const k of Object.keys(src)) {\n    if (STRIP_FIELDS.has(k)) continue;\n    if (ALLOWED_NODE_FIELDS.size === 0 || ALLOWED_NODE_FIELDS.has(k)) {\n      out[k] = src[k];\n    }\n  }\n  return out;\n}\n\n// --- Ableitung ---\nconst newSourceRaw  = getFoundNode(sourceSearch, originalEdge.source);\nconst newTargetRaw  = getFoundNode(targetSearch, originalEdge.target);\nconst newSource     = sanitizeNode(newSourceRaw);\nconst newTarget     = sanitizeNode(newTargetRaw);\n\nconst sourceCreate  = isEmptyResult(sourceSearch);\nconst targetCreate  = isEmptyResult(targetSearch);\n\n// --- Ausgabe ---\n// relationship_strength bleibt auf der Kante (originalEdge)\nreturn [\n  {\n    json: {\n      ...originalEdge,\n      source: { ...newSource, create: sourceCreate },\n      target: { ...newTarget, create: targetCreate },\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        832
+      ],
+      "id": "ff5f943c-60f3-448d-8ad9-b06da4ec4f20",
+      "name": "Merge search result"
+    },
+    {
+      "parameters": {
+        "operation": "matchNodes",
+        "matchLabels": "=",
+        "matchProperties": "={\n  \"key\": \"{{ $json.source.key }}\"\n}",
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        336,
+        912
+      ],
+      "id": "296eb5ee-84a0-443f-b54d-902e06bc7425",
+      "name": "Search existing source",
+      "notesInFlow": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "matchNodes",
+        "matchLabels": "=",
+        "matchProperties": "={\n  \"key\": \"{{ $json.target.key }}\"\n}",
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        336,
+        1088
+      ],
+      "id": "b904474b-2899-4b1c-b333-e667affd22fc",
+      "name": "Search existing target",
+      "notesInFlow": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "createNode",
+        "labels": "={{ $json.source.type }}",
+        "properties": "={\n  \"id\": \"{{ $json.source.id }}\",\n  \"key\": \"{{ $json.source.key }}\",\n  \"name\": \"{{ $json.source.name }}\",\n  \"type\": \"{{ $json.source.type }}\",\n  \"description\": \"{{ $json.source.description }}\",\n  \"original_name\": \"{{ $json.source.original_name }}\"\n }",
+        "options": {
+          "returnData": true
+        }
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        544
+      ],
+      "id": "f3c3ad62-98b6-4fbb-9868-8b40b0a83a31",
+      "name": "Create source node",
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1456,
+        848
+      ],
+      "id": "353a75fe-65a4-4068-8959-071574660215",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "operation": "createNode",
+        "labels": "={{ $json.target.type }}",
+        "properties": "={\n  \"id\": \"{{ $json.target.id }}\",\n  \"key\": \"{{ $json.target.key }}\",\n  \"name\": \"{{ $json.target.name }}\",\n  \"type\": \"{{ $json.target.type }}\",\n  \"description\": \"{{ $json.target.description }}\",\n  \"original_name\": \"{{ $json.target.original_name }}\"\n }",
+        "options": {
+          "returnData": true
+        }
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        1104
+      ],
+      "id": "d01833a1-00b6-4839-bd02-3e021ffa705d",
+      "name": "Create target node",
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "query": "=MATCH (source { id: \"{{ $json.source.id }}\" })-[r:{{ $json.relationship_short }}]->(target { id: \"{{ $json.target.id }}\" })\nRETURN source, r, target ",
+        "options": {}
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        1008
+      ],
+      "id": "fd49324d-804d-4dad-91c5-575311b14490",
+      "name": "Search existing relationship",
+      "alwaysOutputData": true,
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "edf31296-a33b-44f4-96ae-fca376299cfc",
+              "leftValue": "={{ $json.r }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1904,
+        1104
+      ],
+      "id": "ab55086f-842f-44e4-8333-0f7c6e08f619",
+      "name": "Test, if relationship exists",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "createRelationship",
+        "startNodeMatchLabels": "=",
+        "startNodeMatchProperties": "={\n\"id\": \"{{ $json.source.id }}\"\n}",
+        "endNodeMatchLabels": "=",
+        "endNodeMatchProperties": "={\n\"id\": \"{{ $json.target.id }}\"\n}",
+        "relationshipType": "={{ $json.relationship_short }}",
+        "relationshipProperties": "={\n\"metadata\": \"{{ $json }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        2352,
+        1152
+      ],
+      "id": "bb8cc41d-5be9-48b8-b4fa-c71f9814e6c5",
+      "name": "Create relationship",
+      "alwaysOutputData": false,
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2128,
+        864
+      ],
+      "id": "3876c531-b4e8-4d37-8862-5c097522db02",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a03246e0-1c5b-4de2-afb0-1f9aa5b82681",
+              "leftValue": "={{ $json.source.create }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        624
+      ],
+      "id": "2190a963-5f90-45fd-a44b-7a8590ca7ea5",
+      "name": "If",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "60d0b32e-7eb4-48d7-9fd4-43ccfa043908",
+              "leftValue": "={{ $json.target.create }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        1024
+      ],
+      "id": "4e8d3e3c-cdf3-49fd-94d1-24fc7c8a3a35",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alle eingehenden Items als Edges lesen\nconst edges = items.map(i => i.json);\n\n// Map für eindeutige Nodes (entfernt Dubletten nach id)\nconst seen = new Map();\n\n// holt – je nach Form – den eigentlichen Node (flach oder mit .properties)\nfunction unwrapNode(n) {\n  if (!n || typeof n !== 'object') return null;\n  return (n.properties && typeof n.properties === 'object') ? n.properties : n;\n}\n\nfunction addIfValid(n) {\n  const node = unwrapNode(n);\n  if (!node) return;\n  // Primär nach id deduplizieren, Fallback auf key, sonst auf name\n  const key = node.id || node.key || node.name;\n  if (!key) return;\n  if (!seen.has(key)) seen.set(key, node);\n}\n\n// durch alle Edges laufen\nfor (const e of edges) {\n  addIfValid(e.source);\n  addIfValid(e.target);\n}\n\n// Ausgabe\nreturn [{\n  json: { nodes: Array.from(seen.values()) }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        736
+      ],
+      "id": "84850d55-9a61-4f72-b04d-8999f02f2e8a",
+      "name": "List of Nodes"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2592,
+        1136
+      ],
+      "id": "3a3cf995-d050-4932-afc6-604981bc4c96",
+      "name": "Create Return Data"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 912,
+        "width": 384,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -400,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "bba073c4-b4db-4d1d-97dc-871726c8dbfe",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 912,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "5d77ab12-9d76-497e-b101-13cc3d89cba9",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 912,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        304,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "e30a3764-3260-4012-bcd6-cd722fd7db5f",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 912,
+        "width": 656,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        864,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "1639541d-252f-4cba-8fd7-e920df8b4a96",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 912,
+        "width": 656,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1520,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "e261d90b-8dd9-4f2e-9165-a73b92d6a3d0",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 912,
+        "width": 576,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2176,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "178cfe90-edcd-4cc6-b625-957e20533fb7",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Loop Over nodes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over nodes": {
+      "main": [
+        [
+          {
+            "node": "List of Nodes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search existing source",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search existing target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Merge search result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge search result": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search existing source": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Search existing target": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Create source node": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Create target node": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Search existing relationship",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search existing relationship": {
+      "main": [
+        [
+          {
+            "node": "Test, if relationship exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create relationship": {
+      "main": [
+        [
+          {
+            "node": "Create Return Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Test, if relationship exists": {
+      "main": [
+        [
+          {
+            "node": "Loop Over nodes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Create relationship",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Return Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create source node",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Create target node",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "List of Nodes": {
+      "main": [
+        []
+      ]
+    },
+    "Create Return Data": {
+      "main": [
+        [
+          {
+            "node": "Loop Over nodes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "31d13cf3-3c4f-47df-8d53-f2e7660d6196",
+  "meta": {
+    "instanceId": "c9edcf0f7da7eade4256e0e7e4c62bd0f101171b9be65e9e3bdd6b25808f3d3c"
+  },
+  "id": "PK9m7IDapilgwiFB",
+  "tags": []
+}

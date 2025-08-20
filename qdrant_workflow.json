@@ -1,0 +1,788 @@
+{
+  "name": "qdrant_workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -416,
+        -80
+      ],
+      "id": "beed17a9-9ac2-4c05-aa2e-6c6b70fa390d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "collectionExists",
+        "collectionName": "={{ $workflow.name }}",
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-qdrant.qdrant",
+      "typeVersion": 1,
+      "position": [
+        256,
+        -96
+      ],
+      "id": "d34b7b54-53db-4127-b475-03c17422eaa4",
+      "name": "Check Collection Exists",
+      "credentials": {
+        "qdrantRestApi": {
+          "id": "vnb2gKatdjIOCeYZ",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d1e0c23b-5f41-4aa9-b12a-bea3c285bafc",
+              "leftValue": "={{ $json.result.exists }}",
+              "rightValue": "\"false\"",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -96
+      ],
+      "id": "29458d46-c2b2-422a-b139-438c9dc5b181",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "createCollection",
+        "collectionName": "={{ $workflow.name }}",
+        "vectors": "  {\n    \"size\": 768,\n    \"distance\": \"Cosine\"\n  }",
+        "shardNumber": 1,
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-qdrant.qdrant",
+      "typeVersion": 1,
+      "position": [
+        704,
+        0
+      ],
+      "id": "dc7c3257-76cd-4367-afe0-ef8469605ea7",
+      "name": "Create Collection",
+      "credentials": {
+        "qdrantRestApi": {
+          "id": "vnb2gKatdjIOCeYZ",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        -176
+      ],
+      "id": "954315ed-4bca-457c-be7c-7ce0dd74783c",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -176
+      ],
+      "id": "9cb86f3a-b456-4dbf-ae54-a9754d81c84c",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.baseUrl || 'http://qdrant.qdrant:6333'}}/collections/{{ $workflow.name }}/points/{{ $json.id }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2176,
+        48
+      ],
+      "id": "1cbfae0b-2793-4dc1-b3bc-8411e929aeb1",
+      "name": "Point by ID (per HTTP)",
+      "notes": "={{  }}"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.baseUrl || 'http://qdrant.qdrant:6333'}}/collections/{{$workflow.name}}/points/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": [{{ $json.vector }}],\n  \"limit\": 1,\n  \"with_payload\": false,\n  \"with_vector\": false,\n  \"score_threshold\": 0.90\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c61c1935-28cd-4d40-8cd3-45c7fb345923",
+      "name": "HTTP Vector Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2848,
+        -112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{$json.baseUrl || 'http://qdrant.qdrant:6333'}}/collections/{{$workflow.name}}/points",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    points: [\n      {\n        id: (() => {\n          const h = String($json.id || '')\n            .toLowerCase()\n            .replace(/[^0-9a-f]/g, '')\n            .padEnd(32, '0')\n            .slice(0, 32)\n            .split('');\n          h[12] = '5'; // Version 5\n          const variants = ['8','9','a','b']; // Variant 10xx\n          h[16] = variants[parseInt(h[16] || '0', 16) % 4];\n          return `${h.slice(0,8).join('')}-${h.slice(8,12).join('')}-${h.slice(12,16).join('')}-${h.slice(16,20).join('')}-${h.slice(20,32).join('')}`;\n        })(),\n        vector: $json.vector,\n        payload: (() => {\n          // alle Felder außer \"vector\"\n          const copy = JSON.parse(JSON.stringify($json));\n          delete copy.vector;\n          delete copy.create\n          return copy;\n        })()\n      }\n    ]\n  }\n}}",
+        "options": {}
+      },
+      "id": "d126dea3-5fea-4a11-896c-e22f80985c97",
+      "name": "HTTP Upsert Point",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3520,
+        -256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "281620f8-d56a-4757-9b7a-3dcf51e50664",
+              "leftValue": "={{ $json.body.result }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "array",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3072,
+        -112
+      ],
+      "id": "1e8a6377-ffba-4b05-8ba2-e1bd3773a444",
+      "name": "Is result empty?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "281620f8-d56a-4757-9b7a-3dcf51e50664",
+              "leftValue": "={{$json.statusCode}}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2400,
+        48
+      ],
+      "id": "c821e38f-ca16-4fa4-bc1c-88e6d83bd6a6",
+      "name": "Is status code 200?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3744,
+        16
+      ],
+      "id": "39ba52a2-a569-47bd-9261-119fc8876ee4",
+      "name": "Return"
+    },
+    {
+      "parameters": {
+        "model": "nomic-embed-text:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        80
+      ],
+      "id": "a89843d0-6cf0-4b5a-9f6a-047417b0603e",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "awzaZMaoPxhKSura",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "code": {
+          "execute": {
+            "code": "// Text vorbereiten\nconst text = `${$json.name ?? ''}\\n\\n${$json.description ?? ''}`.trim();\n\n// Embedding-Subnode holen (Input \"Embedding\" muss verbunden sein; Max connections = 1)\nlet emb = await this.getInputConnectionData('ai_embedding', 0);\nif (Array.isArray(emb)) emb = emb[0];\n\n// Vektor erzeugen\nlet v = await emb.embedQuery(text);\n\n// In echtes Plain-Array casten (Float32Array -> number[])\nconst vector = Array.isArray(v) ? v : Array.from(v);\n\n// (Optional: defensive normalize, falls Lib ein TypedArray in nested Struktur liefert)\n// const vector = JSON.parse(JSON.stringify(Array.isArray(v) ? v : Array.from(v)));\n\nreturn [{ json: { ...$json, vector } }];"
+          }
+        },
+        "inputs": {
+          "input": [
+            {
+              "type": "ai_embedding",
+              "maxConnections": 1,
+              "required": true
+            },
+            {
+              "type": "main",
+              "required": true
+            },
+            {
+              "type": "ai_textSplitter",
+              "required": true
+            }
+          ]
+        },
+        "outputs": {
+          "output": [
+            {
+              "type": "main"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        -160
+      ],
+      "id": "81b06767-5bd4-48f9-a1e3-d511a7dcee84",
+      "name": "Generate Vector from Title and Text"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2624,
+        -112
+      ],
+      "id": "823ad298-b6a3-4cd4-b385-2e9aaaeb3672",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3296,
+        -256
+      ],
+      "id": "08d39b3d-aaa7-4ba8-b8e2-330a48160b5c",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "separator": "\\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        80
+      ],
+      "id": "53e6dd55-152e-4b4d-9976-da0a5eff8b58",
+      "name": "Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "nodes",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        -176
+      ],
+      "id": "b37b826e-339c-48fe-a62a-450cab59170f",
+      "name": "Split Out1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1376,
+        -176
+      ],
+      "id": "af6d8235-5ad4-40f5-a284-f5d0d991ba7c",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        -368
+      ],
+      "id": "a74e0678-0a8b-4346-8289-eeb3c9b61a56",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        32,
+        -96
+      ],
+      "id": "b36baa5e-8545-41f5-8aae-660285df1427",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 768,
+        "width": 432,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -480,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "e88d5b7a-6631-4956-9312-85af96599c48",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 768,
+        "width": 1024
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -48,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "0df506fe-8105-424d-89ce-5c571a4a87c4",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 768,
+        "width": 768,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        976,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "f292529a-64a3-4843-b662-72d333d76920",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 768,
+        "width": 384,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1744,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "fd36826a-b1ac-403b-9291-88c8e6d46a5c",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 768,
+        "width": 1328,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2128,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "e20110d0-6b72-4341-af0d-b5349a36d396",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 768,
+        "width": 480,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3456,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "e7d86d3a-f3ac-4093-9d25-b749071b7043",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check Collection Exists": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Create Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Collection": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Split Out1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Point by ID (per HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Is status code 200?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Vector Search": {
+      "main": [
+        [
+          {
+            "node": "Is result empty?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is result empty?": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is status code 200?": {
+      "main": [
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Upsert Point": {
+      "main": [
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Generate Vector from Title and Text",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Vector from Title and Text": {
+      "main": [
+        [
+          {
+            "node": "Point by ID (per HTTP)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "HTTP Vector Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Upsert Point",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Generate Vector from Title and Text",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Vector from Title and Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Check Collection Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "24dfec00-ca09-4703-8903-4fd610db7edf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c9edcf0f7da7eade4256e0e7e4c62bd0f101171b9be65e9e3bdd6b25808f3d3c"
+  },
+  "id": "9w5OBSavQO9BZ47S",
+  "tags": []
+}

@@ -1,0 +1,361 @@
+{
+  "name": "query_workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        32,
+        720
+      ],
+      "id": "afc4fd55-0f73-44e6-922c-df1d40566eb1",
+      "name": "When chat message received",
+      "webhookId": "d299f255-2ea0-4482-b0b8-30c9457327f3"
+    },
+    {
+      "parameters": {
+        "model": "nomic-embed-text:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1120
+      ],
+      "id": "61c87b31-4356-4390-a41f-f0a22cf35a37",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "awzaZMaoPxhKSura",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "code": {
+          "execute": {
+            "code": "// Text vorbereiten\nconst text = `${$json.name ?? ''}\\n\\n${$json.description ?? ''}`.trim();\n\n// Embedding-Subnode holen (Input \"Embedding\" muss verbunden sein; Max connections = 1)\nlet emb = await this.getInputConnectionData('ai_embedding', 0);\nif (Array.isArray(emb)) emb = emb[0];\n\n// Vektor erzeugen\nlet v = await emb.embedQuery(text);\n\n// In echtes Plain-Array casten (Float32Array -> number[])\nconst vector = Array.isArray(v) ? v : Array.from(v);\n\n// (Optional: defensive normalize, falls Lib ein TypedArray in nested Struktur liefert)\n// const vector = JSON.parse(JSON.stringify(Array.isArray(v) ? v : Array.from(v)));\n\nreturn [{ json: { ...$json, vector } }];"
+          }
+        },
+        "inputs": {
+          "input": [
+            {
+              "type": "ai_embedding",
+              "maxConnections": 1,
+              "required": true
+            },
+            {
+              "type": "main",
+              "required": true
+            }
+          ]
+        },
+        "outputs": {
+          "output": [
+            {
+              "type": "main"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [
+        256,
+        896
+      ],
+      "id": "8503a9da-05c0-478c-add1-506f150eedc3",
+      "name": "Generate Vector from Title and Text"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://qdrant.qdrant:6333/collections/wf_raggraf_qdrant/points/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": [{{ $json.vector }}],\n  \"limit\": 10,\n  \"with_payload\": true,\n  \"score_threshold\": 0.1\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        656,
+        896
+      ],
+      "id": "87037d9b-5fd7-4f22-9238-83da3417464c",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $json.result || [];\n\nconst entity_ids = results.map(item => item.payload?.id).filter(Boolean);\n\nreturn [\n  {\n    json: {\n      entity_ids\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        896
+      ],
+      "id": "9bfdb71b-e781-4b10-a58c-f0eeb87c0aab",
+      "name": "Extract Ids"
+    },
+    {
+      "parameters": {
+        "query": "=// Erwartet: $json.entity_ids ist ein Array von Strings\n\n// Hop 1\nWITH {{ JSON.stringify(Array.isArray($json.entity_ids) ? $json.entity_ids : [$json.entity_ids]) }} AS ids\nMATCH (e)-[r]-(related)\nWHERE e.id IN ids\nRETURN e  AS entity,\n       r  AS relationship,\n       related AS related_node\n\nUNION ALL\n\n// Hop 2\nWITH {{ JSON.stringify(Array.isArray($json.entity_ids) ? $json.entity_ids : [$json.entity_ids]) }} AS ids\nMATCH (e)-[r1]-(n1)-[r2]-(n2)\nWHERE e.id IN ids\nRETURN n1 AS entity,\n       r2 AS relationship,\n       n2 AS related_node",
+        "options": {
+          "transactionType": "auto"
+        }
+      },
+      "type": "n8n-nodes-neo4jtool.neo4j",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        896
+      ],
+      "id": "3375b0fd-e5ac-4991-a96c-1e68419e6738",
+      "name": "Neo4j",
+      "credentials": {
+        "neo4jApi": {
+          "id": "pW0iA7PoxRYbzvpl",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Erwartete Eingabe:\n// - Entweder items[0].json ist ein Array von { entity, relationship, related_node }-Objekten\n// - Oder jedes items[i].json ist genau so ein Objekt\n// Ausgabe: { nodes: string[], edges: string[] }\n\nfunction getName(node) {\n  return node?.properties?.name ?? node?.name ?? null;\n}\n\nconst input =\n  Array.isArray(items[0]?.json)\n    ? items[0].json                           // Fall A: ein Item mit Array\n    : items.map(i => i.json);                 // Fall B: viele Items\n\nconst nodeSet = new Set();\nconst edgeSet = new Set();\n\nfor (const entry of input) {\n  const e = entry?.entity;\n  const r = entry?.relationship;\n  const t = entry?.related_node;\n\n  const eName = getName(e);\n  const tName = getName(t);\n  const rType = r?.type ?? r?.properties?.type ?? null;\n\n  if (eName) nodeSet.add(eName);\n  if (tName) nodeSet.add(tName);\n\n  if (eName && rType && tName) {\n    edgeSet.add(`${eName} ${rType} ${tName}`);\n  }\n}\n\nreturn [\n  {\n    json: {\n      nodes: Array.from(nodeSet),\n      edges: Array.from(edgeSet),\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        896
+      ],
+      "id": "8231f306-fe6a-4955-8e67-c7b6e44debe0",
+      "name": "format graph"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an intelligent assistant with access to the following knowledge graph:\n\nNodes: {{ $json.nodes }}\n\nEdges: {{ $json.edges }}\n\nUsing this graph, Answer the following question:\n\nUser Query: \"{{ $json.chatInput }}\"",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1728,
+        704
+      ],
+      "id": "6775db0a-2dd3-46bf-9593-c93d1f61b02c",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "llama3.3:70b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmOllama",
+      "typeVersion": 1,
+      "position": [
+        1728,
+        896
+      ],
+      "id": "a123425a-b16b-47e4-b38f-1d2fbc27191a",
+      "name": "Ollama Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "awzaZMaoPxhKSura",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1552,
+        704
+      ],
+      "id": "d8145271-5a19-4357-a70c-aee71393a7e6",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 640,
+        "width": 1328
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        192,
+        624
+      ],
+      "typeVersion": 1,
+      "id": "0d87b951-8f52-444d-bf75-168ccc4860a9",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 640,
+        "width": 624,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1520,
+        624
+      ],
+      "typeVersion": 1,
+      "id": "87dbaf23-493f-4376-bd45-546e670ce4c5",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 640,
+        "width": 208,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        624
+      ],
+      "typeVersion": 1,
+      "id": "a553c3d2-77e4-4836-bab9-488395f8fc84",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Generate Vector from Title and Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Generate Vector from Title and Text",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Vector from Title and Text": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extract Ids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Ids": {
+      "main": [
+        [
+          {
+            "node": "Neo4j",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neo4j": {
+      "main": [
+        [
+          {
+            "node": "format graph",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format graph": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "10161ab7-2ed6-457a-8dc0-cb2fc3a060c4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c9edcf0f7da7eade4256e0e7e4c62bd0f101171b9be65e9e3bdd6b25808f3d3c"
+  },
+  "id": "SfF2Sqdz90JlJMlx",
+  "tags": []
+}
